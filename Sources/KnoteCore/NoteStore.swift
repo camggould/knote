@@ -87,11 +87,14 @@ public final class NoteStore: @unchecked Sendable {
     public func create(body: String) throws -> Note {
         let note = Note(body: body)
         try dbQueue.write { db in try note.insert(db) }
+        // Extract and sync tags from body
+        let tagNames = Note.extractTags(from: body)
+        try setTags(noteID: note.id, names: tagNames)
         return note
     }
 
     public func update(id: String, body: String) throws -> Note? {
-        try dbQueue.write { db in
+        let result: Note? = try dbQueue.write { db in
             guard var note = try Note.fetchOne(db, key: id) else { return nil }
             note.body = body
             note.title = Note.deriveTitle(from: body)
@@ -99,6 +102,11 @@ public final class NoteStore: @unchecked Sendable {
             try note.update(db)
             return note
         }
+        guard result != nil else { return nil }
+        // Extract and sync tags from body
+        let tagNames = Note.extractTags(from: body)
+        try setTags(noteID: id, names: tagNames)
+        return try fetch(id: id)
     }
 
     public func delete(id: String) throws {

@@ -109,7 +109,7 @@ private struct ResultRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(result.note.title)
                     .font(.system(size: 15, weight: .medium))
                     .lineLimit(1)
@@ -122,6 +122,9 @@ private struct ResultRow: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
+                    if !result.tags.isEmpty {
+                        tagsRow
+                    }
                 }
             }
             Spacer()
@@ -130,7 +133,7 @@ private struct ResultRow: View {
                 .foregroundStyle(.tertiary)
         }
         .padding(.horizontal, 14)
-        .frame(height: 58)
+        .frame(height: confirming || result.tags.isEmpty ? 58 : 74)
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(confirming ? Color.red.opacity(0.15)
@@ -142,6 +145,23 @@ private struct ResultRow: View {
     private var snippet: String {
         let body = result.note.body.replacingOccurrences(of: "\n", with: " ")
         return String(body.prefix(120))
+    }
+
+    private var tagsRow: some View {
+        HStack(spacing: 6) {
+            ForEach(result.tags, id: \.self) { tag in
+                Text("#\(tag)")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(Color.accentColor.opacity(0.15))
+                    )
+            }
+            Spacer()
+        }
     }
 
     private static let formatter: RelativeDateTimeFormatter = {

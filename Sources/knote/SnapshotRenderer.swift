@@ -35,12 +35,19 @@ enum SnapshotRenderer {
         render(state, to: dir.appendingPathComponent("03-confirm-delete.png"))
 
         // Scenario 4: compose mode.
-        state.query = "/n Draft the launch post — emphasize local-first + privacy"
+        state.query = "/n Draft the launch post — emphasize local-first + privacy #work"
         state.results = []
         state.phase = .editing
         state.selection = nil
         state.statusMessage = nil
         render(state, to: dir.appendingPathComponent("04-compose.png"))
+
+        // Scenario 5: tag search (#work) — chips visible.
+        state.query = "#work"
+        state.results = state.searchForSnapshot("#work")
+        state.phase = .editing
+        state.selection = nil
+        render(state, to: dir.appendingPathComponent("05-tag-search.png"))
 
         FileHandle.standardError.write(Data("snapshots written to \(dir.path)\n".utf8))
     }
@@ -49,11 +56,11 @@ enum SnapshotRenderer {
         // In-memory store + lexical encoder (deterministic, no model load).
         let store = try! NoteStore(inMemory: true)
         let samples = [
-            "Quarterly budget meeting — cut cloud spend, revisit headcount in Q3",
-            "Budget planning notes for next year: infra, tooling, offsite",
-            "Groceries: oat milk, sourdough, spinach, coffee beans",
-            "Book from Sam: The Design of Everyday Things",
-            "Fix the flaky login test before the release cut",
+            "Quarterly budget meeting — cut cloud spend, revisit headcount in Q3 #work #finance",
+            "Budget planning notes for next year: infra, tooling, offsite #work",
+            "Groceries: oat milk, sourdough, spinach, coffee beans #home",
+            "Book from Sam: The Design of Everyday Things #reading",
+            "Fix the flaky login test before the release cut #work #bug",
         ]
         for body in samples { _ = try? store.create(body: body) }
 
