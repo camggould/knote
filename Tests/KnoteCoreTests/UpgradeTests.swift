@@ -95,4 +95,26 @@ final class UpgradeTests: XCTestCase {
         try store.setTags(noteID: "old1", names: ["finance"])
         XCTAssertEqual(try store.tags(noteID: "old1").map(\.name), ["finance"])
     }
+
+    func testUpgradeBackfillsTagsForPreexistingNotes() throws {
+        let path = tempDBPath()
+        defer { try? FileManager.default.removeItem(atPath: path) }
+
+        // A v1 note whose body has #hashtags — written before tags existed, so
+        // it has no tag rows.
+        let old = try DatabaseQueue(path: path)
+        try NoteStore.makeMigrator().migrate(old, upTo: "v1")
+        try old.write { db in
+            try db.execute(sql: """
+                INSERT INTO note (id, body, title, createdAt, updatedAt)
+                VALUES ('old1', 'Plan the offsite #work #travel', 'Plan the offsite', 1.0, 2.0)
+                """)
+        }
+        try old.close()
+
+        // Upgrade → the v3 backfill parses tags from existing bodies.
+        let store = try NoteStore(path: URL(fileURLWithPath: path))
+        XCTAssertEqual(try store.tags(noteID: "old1").map(\.name).sorted(), ["travel", "work"])
+        XCTAssertEqual(try store.noteIDs(withTag: "work"), ["old1"])
+    }
 }

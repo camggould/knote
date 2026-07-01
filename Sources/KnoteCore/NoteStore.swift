@@ -80,6 +80,28 @@ public final class NoteStore: @unchecked Sendable {
                 t.primaryKey(["fromNoteId", "toNoteId", "kind"])
             }
         }
+        // Backfill tags for notes that predate the tag feature (e.g. v0.1.0
+        // notes with #hashtags in their body). Idempotent; a no-op on a fresh
+        // install. Runs once, so notes are tag-searchable right after upgrade.
+        m.registerMigration("v3-backfill-tags") { db in
+            let rows = try Row.fetchAll(db, sql: "SELECT id, body FROM note")
+            for row in rows {
+                let noteId: String = row["id"]
+                let body: String = row["body"]
+                for name in Note.extractTags(from: body) {
+                    try db.execute(sql: """
+                        INSERT INTO tag (id, name) VALUES (?, ?)
+                        ON CONFLICT(name) DO NOTHING
+                        """, arguments: [UUID().uuidString, name])
+                    guard let tagId = try String.fetchOne(
+                        db, sql: "SELECT id FROM tag WHERE name = ?", arguments: [name]) else { continue }
+                    try db.execute(sql: """
+                        INSERT INTO noteTag (noteId, tagId) VALUES (?, ?)
+                        ON CONFLICT(noteId, tagId) DO NOTHING
+                        """, arguments: [noteId, tagId])
+                }
+            }
+        }
         return m
     }
 
