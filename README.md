@@ -12,22 +12,31 @@ See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the full design.
 
 ## Status
 
-Working v1 skeleton, end-to-end:
+Menu-bar app, end-to-end. Working toward **v0.2.0-beta**.
 
+Core:
 - ✅ Menu-bar accessory app (no Dock icon), runs in the background, ~48 MB idle.
 - ✅ Global hotkey **⌥Space** (Carbon — no Accessibility permission needed),
   rebindable in **Settings…** (menu-bar icon → Settings, or ⌘,).
 - ✅ Floating panel over any Space / fullscreen app; click-away / Esc to dismiss.
 - ✅ `/n` capture → SQLite (GRDB) with an FTS5 mirror.
 - ✅ Hybrid ranking: semantic (vectors) + lexical (BM25) fused with RRF + recency.
-- ✅ Arrow-to-select, backspace-to-delete with inline confirm (§8 state machine).
+- ✅ Arrow-to-select, backspace-to-delete with inline confirm.
+
+v0.2.0-beta features:
+- ✅ **Tags** — `#tag` in a note is parsed, shown as chips, and searchable (`#work`).
+- ✅ **Spaces** — `/s` create, `/ns <space>` capture-into, `/ss <space>` scoped
+  search, with **Tab** autocomplete.
+- ✅ **Linked notes** — `⌘L` links a note to an answer (question ↔ answer);
+  linked notes show an indicator.
+- ✅ **MCP server** — `knote-mcp` exposes read-only search to LLM clients (below).
+- ✅ **Auto-update** — Check for Updates pulls the newest GitHub Release.
+
+Encoder:
 - ✅ On-device encoder via Apple **NLEmbedding**, loaded lazily to keep idle light.
-- 🚧 **Core ML BGE** encoder (better retrieval): app-side code is in place and
-  auto-activates when the model file exists. Producing it needs a one-time
-  conversion under Python 3.11/3.12 (see below) — not 3.13. Until then,
-  NLEmbedding is used.
-- 🚧 Open-a-result currently copies the note to the clipboard; in-place edit is
-  next.
+- 🚧 **Core ML BGE** (better retrieval): app-side code auto-activates when the
+  model file exists; producing it needs a one-time conversion under Python
+  3.11/3.12 (see below). Until then, NLEmbedding is used.
 
 ## Install
 
@@ -86,6 +95,28 @@ pkill -f "Knote.app/Contents/MacOS/knote"   # quit the running copy
 cp -R build/Knote.app /Applications/
 open /Applications/Knote.app
 ```
+
+## Give an LLM access to your notes (MCP)
+
+`knote-mcp` is a local [MCP](https://modelcontextprotocol.io) stdio server that
+exposes **read-only** tools — `search_notes`, `get_note`, `list_spaces`,
+`list_tags` — over the same local database. An MCP client (Claude Desktop,
+Claude Code, etc.) spawns it on demand; nothing listens on a network.
+
+It's bundled at `Contents/Resources/knote-mcp`. Point your client at it:
+
+```json
+{
+  "mcpServers": {
+    "knote": {
+      "command": "/Applications/Knote.app/Contents/Resources/knote-mcp"
+    }
+  }
+}
+```
+
+(During development the binary is at `.build/debug/knote-mcp`. Set `KNOTE_DB` to
+point at a different database.) Sanity-check it with `./scripts/test-mcp.sh`.
 
 ## Develop
 

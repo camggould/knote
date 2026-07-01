@@ -155,4 +155,29 @@ final class TagFeatureTests: XCTestCase {
         let result = SearchResult(note: note, score: 1.0)
         XCTAssertTrue(result.tags.isEmpty)
     }
+
+    // MARK: - allTags
+
+    func testAllTagsReturnsAllUniqueTags() throws {
+        let store = try NoteStore(inMemory: true)
+        _ = try store.create(body: "Note one #alpha #beta")
+        _ = try store.create(body: "Note two #beta #gamma")
+        let tags = try store.allTags()
+        let names = tags.map { $0.name }
+        XCTAssertEqual(Set(names), ["alpha", "beta", "gamma"])
+    }
+
+    func testAllTagsAreOrderedByName() throws {
+        let store = try NoteStore(inMemory: true)
+        _ = try store.create(body: "Note #zebra #apple #mango")
+        let tags = try store.allTags()
+        let names = tags.map { $0.name }
+        XCTAssertEqual(names, names.sorted())
+    }
+
+    func testAllTagsEmptyStore() throws {
+        let store = try NoteStore(inMemory: true)
+        let tags = try store.allTags()
+        XCTAssertTrue(tags.isEmpty)
+    }
 }

@@ -299,6 +299,12 @@ public final class NoteStore: @unchecked Sendable {
         }
     }
 
+    public func allTags() throws -> [Tag] {
+        try dbQueue.read { db in
+            try Tag.order(Column("name")).fetchAll(db)
+        }
+    }
+
     public func noteIDs(withTag name: String) throws -> [String] {
         let normalizedName = name.trimmingCharacters(in: .whitespaces).lowercased()
         return try dbQueue.read { db in

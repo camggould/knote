@@ -6,6 +6,7 @@ let package = Package(
     platforms: [.macOS(.v14)],
     products: [
         .executable(name: "knote", targets: ["knote"]),
+        .executable(name: "knote-mcp", targets: ["knote-mcp"]),
     ],
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.0.0"),
@@ -27,6 +28,10 @@ let package = Package(
         ),
         .executableTarget(
             name: "knote",
+            dependencies: ["KnoteCore", "KnoteEmbeddings", "KnoteVector"]
+        ),
+        .executableTarget(
+            name: "knote-mcp",
             dependencies: ["KnoteCore", "KnoteEmbeddings", "KnoteVector"]
         ),
         .testTarget(

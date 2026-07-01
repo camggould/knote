@@ -18,9 +18,17 @@ BIN="$(swift build -c "$CONFIG" --show-bin-path)/knote"
 APP="build/Knote.app"
 CONTENTS="$APP/Contents"
 
+BIN_DIR="$(swift build -c "$CONFIG" --show-bin-path)"
+
 rm -rf "$APP"
 mkdir -p "$CONTENTS/MacOS" "$CONTENTS/Resources"
 cp "$BIN" "$CONTENTS/MacOS/knote"
+
+# Bundle the MCP stdio helper so clients have a stable path:
+#   /Applications/Knote.app/Contents/Resources/knote-mcp
+if [[ -f "$BIN_DIR/knote-mcp" ]]; then
+    cp "$BIN_DIR/knote-mcp" "$CONTENTS/Resources/knote-mcp"
+fi
 
 # App icon (generate with scripts/make_icon.py if missing).
 if [[ -f Icon/AppIcon.icns ]]; then
