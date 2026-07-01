@@ -52,3 +52,5 @@ jobs:
             ${{ env.ARTIFACT }}.sha256
           generate_release_notes: true
           fail_on_unmatched_files: true
+          # A tag with a hyphen (e.g. v0.2.0-beta) is a pre-release per SemVer.
+          prerelease: ${{ contains(github.ref_name, '-') }}
