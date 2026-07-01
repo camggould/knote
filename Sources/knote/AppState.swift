@@ -21,6 +21,8 @@ final class AppState: ObservableObject {
     @Published var selection: Int? = nil
     @Published var phase: Phase = .editing { didSet { onContentChange?() } }
     @Published var statusMessage: String? = nil { didSet { onContentChange?() } }
+    /// Non-nil when Tab can complete the space-name token being typed.
+    @Published var spaceSuggestion: String? = nil
     /// Bumped on each panel show so the view can re-focus the field.
     @Published var focusTick = 0
 
@@ -39,20 +41,37 @@ final class AppState: ObservableObject {
         self.indexer = indexer
     }
 
-    // MARK: - Mode / compose parsing
+    // MARK: - Command / mode
 
-    var mode: Mode { isCompose ? .compose : .search }
+    var currentCommand: Command { CommandParser.parse(query) }
 
-    var isCompose: Bool {
-        let q = query.lowercased()
-        return q == "/n" || q.hasPrefix("/n ") || q.hasPrefix("/n\n")
+    var mode: Mode {
+        switch currentCommand {
+        case .compose:
+            return .compose
+        case .composeInSpace(let space, _):
+            return space.isEmpty ? .search : .compose
+        default:
+            return .search
+        }
     }
 
+    /// The body text to save (works for both /n and /ns).
     var composeBody: String {
-        guard isCompose else { return "" }
-        var b = String(query.dropFirst(2))
-        if b.hasPrefix(" ") || b.hasPrefix("\n") { b.removeFirst() }
-        return b.trimmingCharacters(in: .whitespacesAndNewlines)
+        switch currentCommand {
+        case .compose(let body): return body
+        case .composeInSpace(_, let body): return body
+        default: return ""
+        }
+    }
+
+    /// The active space name when in a scoped mode, nil otherwise.
+    var currentSpaceName: String? {
+        switch currentCommand {
+        case .composeInSpace(let space, _): return space.isEmpty ? nil : space
+        case .searchInSpace(let space, _): return space.isEmpty ? nil : space
+        default: return nil
+        }
     }
 
     // MARK: - Lifecycle from the panel
@@ -63,6 +82,7 @@ final class AppState: ObservableObject {
         statusMessage = nil
         phase = .editing
         selection = nil
+        spaceSuggestion = nil
         results = search.recents()
         focusTick += 1
     }
@@ -76,18 +96,66 @@ final class AppState: ObservableObject {
         // editing are made synchronously in the key monitor (see returnToEditing).
         statusMessage = nil
         searchTask?.cancel()
+        updateSpaceSuggestion()
 
-        if isCompose { results = []; return }
+        switch currentCommand {
+        case .compose, .createSpace, .composeInSpace:
+            results = []
 
-        let q = query
-        let svc = search
-        searchTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 120_000_000)
-            if Task.isCancelled { return }
-            let r = await Task.detached { svc.search(q) }.value
-            if Task.isCancelled { return }
-            self?.results = r
+        case .search(let q):
+            let svc = search
+            searchTask = Task { [weak self] in
+                try? await Task.sleep(nanoseconds: 120_000_000)
+                if Task.isCancelled { return }
+                let r = await Task.detached { svc.search(q) }.value
+                if Task.isCancelled { return }
+                self?.results = r
+            }
+
+        case .searchInSpace(let spaceName, let q):
+            let svc = search
+            let storeRef = store
+            searchTask = Task { [weak self] in
+                try? await Task.sleep(nanoseconds: 120_000_000)
+                if Task.isCancelled { return }
+                let r = await Task.detached {
+                    guard let spaceID = (try? storeRef.space(named: spaceName))?.id else {
+                        return [SearchResult]()
+                    }
+                    return svc.search(q, spaceID: spaceID)
+                }.value
+                if Task.isCancelled { return }
+                self?.results = r
+            }
         }
+    }
+
+    // MARK: - Space autocomplete
+
+    private func updateSpaceSuggestion() {
+        guard let partial = CommandParser.spacePrefixBeingTyped(query) else {
+            spaceSuggestion = nil
+            return
+        }
+        let matches = (try? store.spacesMatching(prefix: partial)) ?? []
+        if let first = matches.first, first.name.lowercased() != partial.lowercased() {
+            spaceSuggestion = first.name
+        } else {
+            spaceSuggestion = nil
+        }
+    }
+
+    /// Accept the current Tab suggestion: rewrites the query so the partial space
+    /// token becomes the full suggested name followed by a space.
+    func acceptSpaceSuggestion() {
+        guard let suggestion = spaceSuggestion else { return }
+        let lower = query.lowercased()
+        if lower.hasPrefix("/ns ") {
+            query = "/ns \(suggestion) "
+        } else if lower.hasPrefix("/ss ") {
+            query = "/ss \(suggestion) "
+        }
+        // spaceSuggestion will be cleared by the queryChanged() that fires on query change
     }
 
     // MARK: - Navigation
@@ -115,15 +183,34 @@ final class AppState: ObservableObject {
     func submit() -> Bool {
         if phase == .confirmingDelete { confirmDelete(); return false }
 
-        if mode == .compose {
+        switch currentCommand {
+        case .compose:
             saveNote()
             return false
+
+        case .createSpace(let name):
+            guard !name.isEmpty else { return false }
+            if let space = try? store.createSpace(name: name) {
+                statusMessage = "Space \"\(space.name)\" created"
+                query = ""
+                selection = nil
+                phase = .editing
+                results = search.recents()
+                focusTick += 1
+            }
+            return false
+
+        case .composeInSpace(let spaceName, let body):
+            guard !body.isEmpty else { return false }
+            saveNoteInSpace(spaceName: spaceName, body: body)
+            return false
+
+        case .search, .searchInSpace:
+            let idx = selection ?? (results.isEmpty ? nil : 0)
+            guard let i = idx, results.indices.contains(i) else { return false }
+            open(results[i])
+            return true
         }
-        // search: open the selected (or top) result
-        let idx = selection ?? (results.isEmpty ? nil : 0)
-        guard let i = idx, results.indices.contains(i) else { return false }
-        open(results[i])
-        return true
     }
 
     private func saveNote() {
@@ -134,10 +221,26 @@ final class AppState: ObservableObject {
             query = ""
             selection = nil
             phase = .editing
-            statusMessage = "Saved “\(note.title)”"
+            statusMessage = "Saved \"\(note.title)\""
             results = search.recents()
             focusTick += 1
         }
+    }
+
+    private func saveNoteInSpace(spaceName: String, body: String) {
+        guard !body.isEmpty else { return }
+        guard let note = try? store.create(body: body) else { return }
+        indexer.indexNote(note)
+        // createSpace is idempotent — returns existing space if name already taken.
+        if let space = try? store.createSpace(name: spaceName) {
+            try? store.setSpace(noteID: note.id, spaceID: space.id)
+        }
+        query = ""
+        selection = nil
+        phase = .editing
+        statusMessage = "Saved to \"\(spaceName)\""
+        results = search.recents()
+        focusTick += 1
     }
 
     /// v1 open action: copy the note to the clipboard (a genuinely useful quick
@@ -163,7 +266,7 @@ final class AppState: ObservableObject {
         try? store.delete(id: note.id)
         indexer.removeNote(id: note.id)
         results.remove(at: i)
-        statusMessage = "Deleted “\(note.title)”"
+        statusMessage = "Deleted \"\(note.title)\""
         if results.isEmpty {
             selection = nil; phase = .editing
         } else {
@@ -194,4 +297,8 @@ final class AppState: ObservableObject {
 
     func recentsForSnapshot() -> [SearchResult] { search.recents() }
     func searchForSnapshot(_ query: String) -> [SearchResult] { search.search(query) }
+    func scopedSearchForSnapshot(space: String, _ query: String) -> [SearchResult] {
+        guard let id = (try? store.space(named: space))?.id else { return [] }
+        return search.search(query, spaceID: id)
+    }
 }

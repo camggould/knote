@@ -129,6 +129,12 @@ final class PanelController: NSObject, NSWindowDelegate {
             if cmd || appState.phase == .navigating { appState.requestDelete(); return nil }
             if appState.phase == .confirmingDelete { return nil }
             return event // editing → let the field delete text
+        case kVK_Tab:
+            if appState.spaceSuggestion != nil {
+                appState.acceptSpaceSuggestion()
+                return nil
+            }
+            return event
         case kVK_Escape:
             if appState.handleEscape() { hide() }
             return nil

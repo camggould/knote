@@ -47,7 +47,24 @@ enum SnapshotRenderer {
         state.results = state.searchForSnapshot("#work")
         state.phase = .editing
         state.selection = nil
+        state.spaceSuggestion = nil
         render(state, to: dir.appendingPathComponent("05-tag-search.png"))
+
+        // Scenario 6: space autocomplete (typing "/ns Wo" → ⇥ Work).
+        state.query = "/ns Wo"
+        state.results = []
+        state.spaceSuggestion = "Work"
+        state.phase = .editing
+        state.selection = nil
+        render(state, to: dir.appendingPathComponent("06-space-autocomplete.png"))
+
+        // Scenario 7: scoped search within the Work space.
+        state.query = "/ss Work budget"
+        state.results = state.scopedSearchForSnapshot(space: "Work", "budget")
+        state.spaceSuggestion = nil
+        state.phase = .editing
+        state.selection = nil
+        render(state, to: dir.appendingPathComponent("07-space-scoped-search.png"))
 
         FileHandle.standardError.write(Data("snapshots written to \(dir.path)\n".utf8))
     }
@@ -62,7 +79,12 @@ enum SnapshotRenderer {
             "Book from Sam: The Design of Everyday Things #reading",
             "Fix the flaky login test before the release cut #work #bug",
         ]
-        for body in samples { _ = try? store.create(body: body) }
+        var created: [Note] = []
+        for body in samples { if let n = try? store.create(body: body) { created.append(n) } }
+        // A "Work" space with the two work-related notes, for space snapshots.
+        if let work = try? store.createSpace(name: "Work") {
+            for n in created.prefix(2) { try? store.setSpace(noteID: n.id, spaceID: work.id) }
+        }
 
         let encoder = LexicalOnlyEncoder()
         let index = InMemoryVectorIndex()

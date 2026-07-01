@@ -31,7 +31,7 @@ let package = Package(
         ),
         .testTarget(
             name: "KnoteCoreTests",
-            dependencies: ["KnoteCore"]
+            dependencies: ["KnoteCore", "KnoteEmbeddings", "KnoteVector"]
         ),
     ],
     swiftLanguageModes: [.v5]

@@ -37,6 +37,9 @@ struct RootView: View {
             Image(systemName: state.mode == .compose ? "square.and.pencil" : "magnifyingglass")
                 .font(.system(size: 18, weight: .medium))
                 .foregroundStyle(.secondary)
+            if let spaceName = state.currentSpaceName {
+                spaceChip(spaceName)
+            }
             TextField(text: $state.query, prompt: Text("Search notes, or type /n to add one")) {
                 EmptyView()
             }
@@ -44,9 +47,27 @@ struct RootView: View {
             .font(.system(size: 22, weight: .regular))
             .focused($fieldFocused)
             .onChange(of: state.query) { state.queryChanged() }
+            if let suggestion = state.spaceSuggestion {
+                Text("⇥ \(suggestion)")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
         }
         .padding(.horizontal, 18)
         .frame(height: 60)
+    }
+
+    private func spaceChip(_ name: String) -> some View {
+        Text(name)
+            .font(.caption)
+            .fontWeight(.medium)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(Color.accentColor.opacity(0.2))
+            )
+            .foregroundStyle(Color.accentColor)
     }
 
     private var composeHint: some View {

@@ -103,6 +103,22 @@ public final class SearchService: @unchecked Sendable {
         return Array(results.prefix(config.limit))
     }
 
+    /// Scoped search: restricts results to notes belonging to `spaceID`.
+    /// When `spaceID` is nil, delegates to the global `search(_:)`.
+    public func search(_ query: String, spaceID: String?) -> [SearchResult] {
+        guard let spaceID else { return search(query) }
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return recents(spaceID: spaceID) }
+        return search(query).filter { $0.note.spaceId == spaceID }
+    }
+
+    /// Scoped recents: restricts results to notes belonging to `spaceID`.
+    /// When `spaceID` is nil, delegates to the global `recents()`.
+    public func recents(spaceID: String?) -> [SearchResult] {
+        guard let spaceID else { return recents() }
+        return recents().filter { $0.note.spaceId == spaceID }
+    }
+
     /// Home state: most recently updated notes.
     public func recents() -> [SearchResult] {
         let notes = (try? store.recent(limit: config.limit)) ?? []
