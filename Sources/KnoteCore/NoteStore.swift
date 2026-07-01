@@ -44,6 +44,40 @@ public final class NoteStore: @unchecked Sendable {
                 t.tokenizer = .porter(wrapping: .unicode61())
             }
         }
+        m.registerMigration("v2") { db in
+            // Add spaceId column to note table
+            try db.alter(table: "note") { t in
+                t.add(column: "spaceId", .text)
+            }
+            // Create space table
+            try db.create(table: "space") { t in
+                t.column("id", .text).primaryKey()
+                t.column("name", .text).notNull().unique()
+                t.column("createdAt", .double).notNull()
+            }
+            // Create tag table
+            try db.create(table: "tag") { t in
+                t.column("id", .text).primaryKey()
+                t.column("name", .text).notNull().unique()
+            }
+            // Create noteTag junction table
+            try db.create(table: "noteTag") { t in
+                t.column("noteId", .text).notNull()
+                    .references("note", onDelete: .cascade)
+                t.column("tagId", .text).notNull()
+                    .references("tag", onDelete: .cascade)
+                t.primaryKey(["noteId", "tagId"])
+            }
+            // Create noteLink table for directional links
+            try db.create(table: "noteLink") { t in
+                t.column("fromNoteId", .text).notNull()
+                    .references("note", onDelete: .cascade)
+                t.column("toNoteId", .text).notNull()
+                    .references("note", onDelete: .cascade)
+                t.column("kind", .text).notNull()
+                t.primaryKey(["fromNoteId", "toNoteId", "kind"])
+            }
+        }
         return m
     }
 
@@ -154,5 +188,170 @@ public final class NoteStore: @unchecked Sendable {
             .filter { $0.count >= 2 }
             .map { "\($0)*" }
         return terms.joined(separator: " OR ")
+    }
+
+    // MARK: - Spaces
+
+    @discardableResult
+    public func createSpace(name: String) throws -> Space {
+        let trimmedName = name.trimmingCharacters(in: .whitespaces)
+        return try dbQueue.write { db in
+            // Check if a space with this case-insensitive name already exists
+            if let existing = try Space.fetchOne(db,
+                sql: "SELECT * FROM space WHERE LOWER(name) = LOWER(?)", arguments: [trimmedName]) {
+                return existing
+            }
+            let space = Space(name: trimmedName)
+            try space.insert(db)
+            return space
+        }
+    }
+
+    public func spaces() throws -> [Space] {
+        try dbQueue.read { db in
+            try Space.order(Column("name")).fetchAll(db)
+        }
+    }
+
+    public func space(named: String) throws -> Space? {
+        let trimmedName = named.trimmingCharacters(in: .whitespaces)
+        return try dbQueue.read { db in
+            try Space.fetchOne(db,
+                sql: "SELECT * FROM space WHERE LOWER(name) = LOWER(?)", arguments: [trimmedName])
+        }
+    }
+
+    public func spacesMatching(prefix: String) throws -> [Space] {
+        let trimmedPrefix = prefix.trimmingCharacters(in: .whitespaces)
+        return try dbQueue.read { db in
+            try Space.fetchAll(db,
+                sql: "SELECT * FROM space WHERE LOWER(name) LIKE LOWER(?) ORDER BY name",
+                arguments: ["\(trimmedPrefix)%"])
+        }
+    }
+
+    public func setSpace(noteID: String, spaceID: String?) throws {
+        try dbQueue.write { db in
+            try db.execute(sql: "UPDATE note SET spaceId = ? WHERE id = ?", arguments: [spaceID, noteID])
+        }
+    }
+
+    public func deleteSpace(id: String) throws {
+        try dbQueue.write { db in
+            // Null out spaceId for all notes in this space
+            try db.execute(sql: "UPDATE note SET spaceId = NULL WHERE spaceId = ?", arguments: [id])
+            // Delete the space
+            try Space.deleteOne(db, key: id)
+        }
+    }
+
+    // MARK: - Tags
+
+    public func setTags(noteID: String, names: [String]) throws {
+        try dbQueue.write { db in
+            // Normalize: lowercase, trim, dedupe, drop empties
+            let normalized = Set(
+                names
+                    .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
+                    .filter { !$0.isEmpty }
+            )
+
+            // Upsert tag rows and collect their IDs
+            var tagIds: [String] = []
+            for name in normalized {
+                let id = UUID().uuidString
+                try db.execute(sql: """
+                    INSERT INTO tag (id, name) VALUES (?, ?)
+                    ON CONFLICT(name) DO UPDATE SET id = id
+                    """, arguments: [id, name])
+                // Fetch the actual tag id (in case it was a conflict)
+                if let existingTag = try Tag.fetchOne(db, sql: "SELECT * FROM tag WHERE name = ?", arguments: [name]) {
+                    tagIds.append(existingTag.id)
+                }
+            }
+
+            // Replace this note's noteTag rows
+            try db.execute(sql: "DELETE FROM noteTag WHERE noteId = ?", arguments: [noteID])
+            for tagId in tagIds {
+                try db.execute(sql: """
+                    INSERT INTO noteTag (noteId, tagId) VALUES (?, ?)
+                    """, arguments: [noteID, tagId])
+            }
+        }
+    }
+
+    public func tags(noteID: String) throws -> [Tag] {
+        try dbQueue.read { db in
+            try Tag.fetchAll(db, sql: """
+                SELECT t.* FROM tag t
+                JOIN noteTag nt ON nt.tagId = t.id
+                WHERE nt.noteId = ?
+                ORDER BY t.name
+                """, arguments: [noteID])
+        }
+    }
+
+    public func noteIDs(withTag name: String) throws -> [String] {
+        let normalizedName = name.trimmingCharacters(in: .whitespaces).lowercased()
+        return try dbQueue.read { db in
+            try String.fetchAll(db, sql: """
+                SELECT DISTINCT nt.noteId FROM noteTag nt
+                JOIN tag t ON t.id = nt.tagId
+                WHERE LOWER(t.name) = LOWER(?)
+                """, arguments: [normalizedName])
+        }
+    }
+
+    // MARK: - Links
+
+    public func link(from: String, to: String, kind: LinkKind) throws {
+        try dbQueue.write { db in
+            try db.execute(sql: """
+                INSERT INTO noteLink (fromNoteId, toNoteId, kind) VALUES (?, ?, ?)
+                ON CONFLICT(fromNoteId, toNoteId, kind) DO NOTHING
+                """, arguments: [from, to, kind.rawValue])
+        }
+    }
+
+    public func unlink(from: String, to: String, kind: LinkKind) throws {
+        try dbQueue.write { db in
+            try db.execute(sql: """
+                DELETE FROM noteLink WHERE fromNoteId = ? AND toNoteId = ? AND kind = ?
+                """, arguments: [from, to, kind.rawValue])
+        }
+    }
+
+    public func links(forNoteID: String) throws -> [NoteLink] {
+        try dbQueue.read { db in
+            try NoteLink.fetchAll(db, sql: """
+                SELECT * FROM noteLink WHERE fromNoteId = ? OR toNoteId = ?
+                """, arguments: [forNoteID, forNoteID])
+        }
+    }
+
+    public func linkedNotes(forNoteID: String, kind: LinkKind? = nil) throws -> [Note] {
+        try dbQueue.read { db in
+            if let kind = kind {
+                return try Note.fetchAll(db, sql: """
+                    SELECT DISTINCT n.* FROM note n
+                    WHERE n.id IN (
+                        SELECT toNoteId FROM noteLink WHERE fromNoteId = ? AND kind = ?
+                        UNION
+                        SELECT fromNoteId FROM noteLink WHERE toNoteId = ? AND kind = ?
+                    )
+                    ORDER BY n.updatedAt DESC
+                    """, arguments: [forNoteID, kind.rawValue, forNoteID, kind.rawValue])
+            } else {
+                return try Note.fetchAll(db, sql: """
+                    SELECT DISTINCT n.* FROM note n
+                    WHERE n.id IN (
+                        SELECT toNoteId FROM noteLink WHERE fromNoteId = ?
+                        UNION
+                        SELECT fromNoteId FROM noteLink WHERE toNoteId = ?
+                    )
+                    ORDER BY n.updatedAt DESC
+                    """, arguments: [forNoteID, forNoteID])
+            }
+        }
     }
 }

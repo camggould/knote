@@ -9,18 +9,21 @@ public struct Note: Identifiable, Equatable, Codable, Sendable,
     public var title: String
     public var createdAt: Date
     public var updatedAt: Date
+    public var spaceId: String?
 
     public static let databaseTableName = "note"
 
     public init(id: String = UUID().uuidString,
                 body: String,
                 createdAt: Date = Date(),
-                updatedAt: Date = Date()) {
+                updatedAt: Date = Date(),
+                spaceId: String? = nil) {
         self.id = id
         self.body = body
         self.title = Note.deriveTitle(from: body)
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.spaceId = spaceId
     }
 
     public static func deriveTitle(from body: String) -> String {
