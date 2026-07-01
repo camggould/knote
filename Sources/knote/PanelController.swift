@@ -129,6 +129,18 @@ final class PanelController: NSObject, NSWindowDelegate {
             if cmd || appState.phase == .navigating { appState.requestDelete(); return nil }
             if appState.phase == .confirmingDelete { return nil }
             return event // editing → let the field delete text
+        case kVK_ANSI_L:
+            // ⌘L while navigating with a selection opens the link picker.
+            if cmd, appState.phase == .navigating, appState.selection != nil {
+                appState.beginLinking()
+                return nil
+            }
+            // Otherwise apply the same phase-transition logic as the default case.
+            if (appState.phase == .navigating || appState.phase == .confirmingDelete),
+               !cmd, let s = event.characters, !s.isEmpty {
+                appState.returnToEditing()
+            }
+            return event
         case kVK_Tab:
             if appState.spaceSuggestion != nil {
                 appState.acceptSpaceSuggestion()
@@ -139,8 +151,11 @@ final class PanelController: NSObject, NSWindowDelegate {
             if appState.handleEscape() { hide() }
             return nil
         default:
-            // Printable key while navigating: drop back to editing, pass through.
-            if appState.phase != .editing, !cmd, let s = event.characters, !s.isEmpty {
+            // Printable key while navigating or confirming delete: drop back to
+            // editing, pass through. Do NOT exit .linking — typing there filters
+            // the target list and must stay in linking mode.
+            if (appState.phase == .navigating || appState.phase == .confirmingDelete),
+               !cmd, let s = event.characters, !s.isEmpty {
                 appState.returnToEditing()
             }
             return event

@@ -66,6 +66,17 @@ enum SnapshotRenderer {
         state.selection = nil
         render(state, to: dir.appendingPathComponent("07-space-scoped-search.png"))
 
+        // Scenario 8: linking mode (picking the answer for a selected note).
+        state.query = ""
+        state.phase = .linking
+        state.linkSourceID = "src"
+        state.linkSourceTitle = "Quarterly budget meeting — cut cloud spend, revisit headcount in Q3"
+        state.results = state.recentsForSnapshot()
+        state.selection = 0
+        render(state, to: dir.appendingPathComponent("08-linking.png"))
+        state.linkSourceID = nil
+        state.linkSourceTitle = nil
+
         FileHandle.standardError.write(Data("snapshots written to \(dir.path)\n".utf8))
     }
 
@@ -84,6 +95,10 @@ enum SnapshotRenderer {
         // A "Work" space with the two work-related notes, for space snapshots.
         if let work = try? store.createSpace(name: "Work") {
             for n in created.prefix(2) { try? store.setSpace(noteID: n.id, spaceID: work.id) }
+        }
+        // Link two notes so link indicators appear (answer answers question).
+        if created.count >= 2 {
+            try? store.link(from: created[1].id, to: created[0].id, kind: .answers)
         }
 
         let encoder = LexicalOnlyEncoder()

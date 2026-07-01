@@ -37,10 +37,15 @@ struct RootView: View {
             Image(systemName: state.mode == .compose ? "square.and.pencil" : "magnifyingglass")
                 .font(.system(size: 18, weight: .medium))
                 .foregroundStyle(.secondary)
-            if let spaceName = state.currentSpaceName {
+            if state.phase == .linking {
+                linkChip(state.linkSourceTitle ?? "")
+            } else if let spaceName = state.currentSpaceName {
                 spaceChip(spaceName)
             }
-            TextField(text: $state.query, prompt: Text("Search notes, or type /n to add one")) {
+            TextField(
+                text: $state.query,
+                prompt: Text(state.phase == .linking ? "Type to filter…" : "Search notes, or type /n to add one")
+            ) {
                 EmptyView()
             }
             .textFieldStyle(.plain)
@@ -68,6 +73,23 @@ struct RootView: View {
                     .fill(Color.accentColor.opacity(0.2))
             )
             .foregroundStyle(Color.accentColor)
+    }
+
+    private func linkChip(_ title: String) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: "link")
+                .font(.caption)
+            Text("Link \"\(title)\" to\u{2026}")
+                .font(.caption)
+                .fontWeight(.medium)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 3)
+        .background(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(Color.orange.opacity(0.2))
+        )
+        .foregroundStyle(Color.orange)
     }
 
     private var composeHint: some View {
@@ -149,9 +171,20 @@ private struct ResultRow: View {
                 }
             }
             Spacer()
-            Text(Self.relative(result.note.updatedAt))
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
+            HStack(spacing: 6) {
+                if result.linkCount > 0 {
+                    HStack(spacing: 2) {
+                        Image(systemName: "link")
+                            .font(.caption2)
+                        Text("\(result.linkCount)")
+                            .font(.caption2)
+                    }
+                    .foregroundStyle(.tertiary)
+                }
+                Text(Self.relative(result.note.updatedAt))
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
         }
         .padding(.horizontal, 14)
         .frame(height: confirming || result.tags.isEmpty ? 58 : 74)

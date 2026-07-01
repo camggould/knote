@@ -6,12 +6,14 @@ public struct SearchResult: Identifiable, Equatable, Sendable {
     public var note: Note
     public var score: Double
     public var tags: [String]
+    public var linkCount: Int
     public var id: String { note.id }
 
-    public init(note: Note, score: Double, tags: [String] = []) {
+    public init(note: Note, score: Double, tags: [String] = [], linkCount: Int = 0) {
         self.note = note
         self.score = score
         self.tags = tags
+        self.linkCount = linkCount
     }
 }
 
@@ -61,7 +63,8 @@ public final class SearchService: @unchecked Sendable {
                     .compactMap { id -> SearchResult? in
                         guard let note = notes[id] else { return nil }
                         let tagNames = (try? store.tags(noteID: id))?.map(\.name) ?? []
-                        return SearchResult(note: note, score: 0, tags: tagNames)
+                        let lc = (try? store.links(forNoteID: id))?.count ?? 0
+                        return SearchResult(note: note, score: 0, tags: tagNames, linkCount: lc)
                     }
                     .sorted { $0.note.updatedAt > $1.note.updatedAt }
                 return Array(results.prefix(config.limit))
@@ -97,7 +100,8 @@ public final class SearchService: @unchecked Sendable {
             guard let note = notes[id] else { return nil }
             let tagNames = (try? store.tags(noteID: id))?.map(\.name) ?? []
             let score = (rrf[id] ?? 0) * recencyBoost(note.updatedAt, now: now)
-            return SearchResult(note: note, score: score, tags: tagNames)
+            let lc = (try? store.links(forNoteID: id))?.count ?? 0
+            return SearchResult(note: note, score: score, tags: tagNames, linkCount: lc)
         }
         .sorted { $0.score > $1.score }
         return Array(results.prefix(config.limit))
@@ -124,7 +128,8 @@ public final class SearchService: @unchecked Sendable {
         let notes = (try? store.recent(limit: config.limit)) ?? []
         return notes.map { note in
             let tagNames = (try? store.tags(noteID: note.id))?.map(\.name) ?? []
-            return SearchResult(note: note, score: 0, tags: tagNames)
+            let lc = (try? store.links(forNoteID: note.id))?.count ?? 0
+            return SearchResult(note: note, score: 0, tags: tagNames, linkCount: lc)
         }
     }
 

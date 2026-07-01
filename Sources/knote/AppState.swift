@@ -8,6 +8,7 @@ enum Phase {
     case editing          // caret in the field; typing filters/searches
     case navigating       // a result is selected via arrow keys
     case confirmingDelete // inline "Delete? ↩ / esc" on the selected row
+    case linking          // target-picker: selecting a note to link to
 }
 
 enum Mode { case search, compose }
@@ -21,6 +22,9 @@ final class AppState: ObservableObject {
     @Published var selection: Int? = nil
     @Published var phase: Phase = .editing { didSet { onContentChange?() } }
     @Published var statusMessage: String? = nil { didSet { onContentChange?() } }
+    /// Set while in `.linking` phase: the note being linked FROM.
+    @Published var linkSourceID: String? = nil
+    @Published var linkSourceTitle: String? = nil
     /// Non-nil when Tab can complete the space-name token being typed.
     @Published var spaceSuggestion: String? = nil
     /// Bumped on each panel show so the view can re-focus the field.
@@ -98,6 +102,24 @@ final class AppState: ObservableObject {
         searchTask?.cancel()
         updateSpaceSuggestion()
 
+        // Linking mode: search for link targets, excluding the source note.
+        // Must return early so the normal command switch does not run.
+        if phase == .linking {
+            let svc = search
+            let excludeID = linkSourceID
+            let q = query
+            searchTask = Task { [weak self] in
+                try? await Task.sleep(nanoseconds: 120_000_000)
+                if Task.isCancelled { return }
+                let r = await Task.detached {
+                    q.isEmpty ? svc.recents() : svc.search(q)
+                }.value
+                if Task.isCancelled { return }
+                self?.results = r.filter { $0.note.id != excludeID }
+            }
+            return
+        }
+
         switch currentCommand {
         case .compose, .createSpace, .composeInSpace:
             results = []
@@ -167,14 +189,20 @@ final class AppState: ObservableObject {
         case nil: selection = 0
         case let i?: selection = min(i + 1, results.count - 1)
         }
-        phase = .navigating
+        // Keep `.linking` phase — arrows should navigate targets without exiting linking.
+        if phase != .linking { phase = .navigating }
     }
 
     func moveUp() {
         if phase == .confirmingDelete { phase = .navigating }
         guard let i = selection else { return }
-        if i == 0 { selection = nil; phase = .editing }
-        else { selection = i - 1 }
+        if i == 0 {
+            selection = nil
+            // In `.linking`, pressing up at the top deselects but stays in linking.
+            if phase != .linking { phase = .editing }
+        } else {
+            selection = i - 1
+        }
     }
 
     // MARK: - Actions
@@ -182,6 +210,7 @@ final class AppState: ObservableObject {
     /// Returns true if the panel should hide afterward.
     func submit() -> Bool {
         if phase == .confirmingDelete { confirmDelete(); return false }
+        if phase == .linking { confirmLink(); return false }
 
         switch currentCommand {
         case .compose:
@@ -260,6 +289,50 @@ final class AppState: ObservableObject {
         if phase == .confirmingDelete { phase = .navigating }
     }
 
+    // MARK: - Linking
+
+    /// Enter linking mode: capture the selected note as the link source,
+    /// show recents (minus the source) as candidate targets.
+    func beginLinking() {
+        guard phase == .navigating, let i = selection, results.indices.contains(i) else { return }
+        let sourceNote = results[i].note
+        linkSourceID = sourceNote.id
+        linkSourceTitle = sourceNote.title
+        phase = .linking
+        query = ""
+        selection = nil
+        // Set results immediately so the UI updates synchronously; queryChanged()
+        // will refresh them again if/when the query changes while in linking.
+        results = search.recents().filter { $0.note.id != sourceNote.id }
+    }
+
+    /// Exit linking mode and go back to a clean editing state.
+    func cancelLinking() {
+        linkSourceID = nil
+        linkSourceTitle = nil
+        phase = .editing
+        query = ""
+        results = search.recents()
+        selection = nil
+    }
+
+    /// Confirm the link: connect the selected target as an answer to the source,
+    /// then exit linking.
+    private func confirmLink() {
+        guard let sourceID = linkSourceID else { cancelLinking(); return }
+        let idx = selection ?? (results.isEmpty ? nil : 0)
+        guard let i = idx, results.indices.contains(i) else { cancelLinking(); return }
+        let target = results[i]
+        try? store.link(from: target.note.id, to: sourceID, kind: .answers)
+        statusMessage = "Linked to \"\(linkSourceTitle ?? "note")\""
+        linkSourceID = nil
+        linkSourceTitle = nil
+        phase = .editing
+        query = ""
+        results = search.recents()
+        selection = nil
+    }
+
     func confirmDelete() {
         guard let i = selection, results.indices.contains(i) else { return }
         let note = results[i].note
@@ -281,6 +354,8 @@ final class AppState: ObservableObject {
             phase = .navigating; return false
         case .navigating:
             phase = .editing; selection = nil; return false
+        case .linking:
+            cancelLinking(); return false
         case .editing:
             if query.isEmpty { return true }
             query = ""; queryChanged(); return false
