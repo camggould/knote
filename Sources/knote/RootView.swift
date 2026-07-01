@@ -79,9 +79,10 @@ struct RootView: View {
         HStack(spacing: 4) {
             Image(systemName: "link")
                 .font(.caption)
-            Text("Link \"\(title)\" to\u{2026}")
+            Text("Link \"\(NoteDisplay.title(title, maxLength: 32))\" to\u{2026}")
                 .font(.caption)
                 .fontWeight(.medium)
+                .lineLimit(1)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 3)
@@ -153,7 +154,7 @@ private struct ResultRow: View {
     var body: some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(result.note.title)
+                Text(NoteDisplay.title(result.note.title))
                     .font(.system(size: 15, weight: .medium))
                     .lineLimit(1)
                 if confirming {

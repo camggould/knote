@@ -89,6 +89,7 @@ enum SnapshotRenderer {
             "Groceries: oat milk, sourdough, spinach, coffee beans #home",
             "Book from Sam: The Design of Everyday Things #reading",
             "Fix the flaky login test before the release cut #work #bug",
+            "https://github.com/camggould/knote/releases/tag/v0.1.0 #reading",
         ]
         var created: [Note] = []
         for body in samples { if let n = try? store.create(body: body) { created.append(n) } }

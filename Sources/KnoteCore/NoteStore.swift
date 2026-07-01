@@ -10,16 +10,18 @@ public final class NoteStore: @unchecked Sendable {
         try FileManager.default.createDirectory(
             at: path.deletingLastPathComponent(), withIntermediateDirectories: true)
         dbQueue = try DatabaseQueue(path: path.path)
-        try migrator.migrate(dbQueue)
+        try Self.makeMigrator().migrate(dbQueue)
     }
 
     /// In-memory store for tests.
     public init(inMemory: Bool) throws {
         dbQueue = try DatabaseQueue()
-        try migrator.migrate(dbQueue)
+        try Self.makeMigrator().migrate(dbQueue)
     }
 
-    private var migrator: DatabaseMigrator {
+    /// The schema migrator. Exposed (internal) so tests can simulate an older
+    /// database by migrating only up to a given version (e.g. `upTo: "v1"`).
+    static func makeMigrator() -> DatabaseMigrator {
         var m = DatabaseMigrator()
         m.registerMigration("v1") { db in
             try db.create(table: "note") { t in

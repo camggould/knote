@@ -36,7 +36,10 @@ let package = Package(
         ),
         .testTarget(
             name: "KnoteCoreTests",
-            dependencies: ["KnoteCore", "KnoteEmbeddings", "KnoteVector"]
+            dependencies: [
+                "KnoteCore", "KnoteEmbeddings", "KnoteVector",
+                .product(name: "GRDB", package: "GRDB.swift"),
+            ]
         ),
     ],
     swiftLanguageModes: [.v5]
