@@ -13,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var settingsWindow: SettingsWindowController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        setupMainMenu()
         do {
             let services = try Services.bootstrap()
             let appState = AppState(store: services.store,
@@ -80,6 +81,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func openPanel() { panelController?.show() }
 
     @objc private func openSettings() { settingsWindow?.show() }
+
+    /// A minimal main menu with a standard Edit menu. As a menu-bar accessory app
+    /// we don't show a menu bar, but the Edit menu's key equivalents (⌘X/⌘C/⌘V/
+    /// ⌘A/⌘Z) are still what route cut/copy/paste/select-all to the focused text
+    /// field. Without it, ⌘V does nothing (issue #8). The nil-target actions
+    /// dispatch to the first responder (the field editor).
+    private func setupMainMenu() {
+        let mainMenu = NSMenu()
+
+        let editItem = NSMenuItem()
+        mainMenu.addItem(editItem)
+        let edit = NSMenu(title: "Edit")
+        editItem.submenu = edit
+        edit.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
+        edit.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "Z")
+        edit.addItem(.separator())
+        edit.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+
+        NSApp.mainMenu = mainMenu
+    }
 
     @objc private func toggleLoginItem(_ sender: NSMenuItem) {
         do {
