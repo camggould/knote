@@ -1,0 +1,19 @@
+.build/
+.swiftpm/
+build/
+*.xcodeproj
+*.xcworkspace
+.DS_Store
+
+# Local tooling
+.claude/
+
+# Python (model conversion)
+.venv/
+__pycache__/
+
+# Local model artifacts (produced by scripts/convert_model.py, live in
+# ~/Library/Application Support/knote/model/ — never committed)
+*.mlpackage
+*.mlmodelc
+vocab.txt
