@@ -68,9 +68,13 @@ final class AppState: ObservableObject {
     }
 
     func queryChanged() {
+        // NOTE: do not touch `phase`/`selection` here. This runs via SwiftUI's
+        // `.onChange(of: query)`, which is delivered asynchronously on a later
+        // run-loop tick — so it can land *after* a synchronous arrow-key press
+        // and clobber `.navigating` back to `.editing`, which would misroute the
+        // next Backspace to text editing instead of delete. Transitions into
+        // editing are made synchronously in the key monitor (see returnToEditing).
         statusMessage = nil
-        selection = nil
-        phase = .editing
         searchTask?.cancel()
 
         if isCompose { results = []; return }
