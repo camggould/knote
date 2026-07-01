@@ -77,6 +77,11 @@ enum SnapshotRenderer {
         state.linkSourceID = nil
         state.linkSourceTitle = nil
 
+        // Scenario 9: the Settings window (shortcut + MCP integration section).
+        let hotkeys = HotkeyController(onTrigger: {})
+        rasterize(SettingsView(hotkeys: hotkeys, encoderName: "Apple NLEmbedding"),
+                  width: 488, to: dir.appendingPathComponent("09-settings.png"))
+
         FileHandle.standardError.write(Data("snapshots written to \(dir.path)\n".utf8))
     }
 
@@ -110,20 +115,24 @@ enum SnapshotRenderer {
     }
 
     private static func render(_ state: AppState, to url: URL) {
+        rasterize(RootView(state: state), width: 688, to: url)
+    }
+
+    /// Real AppKit rasterization (cacheDisplay) renders live TextField/ScrollView
+    /// faithfully, unlike ImageRenderer. Host in an offscreen window so
+    /// materials/effects composite correctly.
+    private static func rasterize<V: View>(_ view: V, width: CGFloat, to url: URL) {
         let content = ZStack {
             Color(nsColor: .windowBackgroundColor)
-            RootView(state: state).padding(24)
+            view.padding(24)
         }
-        .frame(width: 688)
+        .frame(width: width)
         .fixedSize(horizontal: false, vertical: true)
 
-        // Real AppKit rasterization (cacheDisplay) renders the live TextField and
-        // ScrollView faithfully, unlike ImageRenderer. Host in an offscreen window
-        // so materials/effects composite correctly.
         let hosting = NSHostingView(rootView: content)
-        hosting.frame = NSRect(x: 0, y: 0, width: 688, height: 10)
+        hosting.frame = NSRect(x: 0, y: 0, width: width, height: 10)
         let height = max(120, hosting.fittingSize.height)
-        hosting.frame = NSRect(x: 0, y: 0, width: 688, height: height)
+        hosting.frame = NSRect(x: 0, y: 0, width: width, height: height)
 
         let window = NSWindow(contentRect: hosting.frame, styleMask: [.borderless],
                               backing: .buffered, defer: false)

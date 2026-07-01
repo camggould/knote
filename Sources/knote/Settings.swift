@@ -109,6 +109,8 @@ struct SettingsView: View {
     @ObservedObject var hotkeys: HotkeyController
     let encoderName: String
 
+    @State private var mcpStatus: String?
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("knote Settings").font(.title2).bold()
@@ -140,10 +142,66 @@ struct SettingsView: View {
                 Spacer()
             }
 
+            Divider()
+
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Connect an AI assistant (MCP)").font(.headline)
+
+                Text(MCPIntegration.helperPath)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+
+                HStack(spacing: 8) {
+                    Button("Add to Codex") {
+                        mcpStatus = nil
+                        switch MCPIntegration.addToCodex() {
+                        case .added:
+                            mcpStatus = "Added to Codex — restart Codex to pick it up."
+                        case .alreadyPresent:
+                            mcpStatus = "Already configured."
+                        case .failed(let msg):
+                            mcpStatus = "Error: \(msg)"
+                        case .needsManual:
+                            break
+                        }
+                    }
+
+                    Button("Add to Claude Code") {
+                        mcpStatus = nil
+                        switch MCPIntegration.addToClaudeCode() {
+                        case .added:
+                            mcpStatus = "Added to Claude Code."
+                        case .alreadyPresent:
+                            mcpStatus = "Already configured."
+                        case .needsManual:
+                            mcpStatus = "Claude CLI not found — command copied; run it in your terminal."
+                        case .failed(let msg):
+                            mcpStatus = "Error: \(msg)"
+                        }
+                    }
+
+                    Button("Copy Codex config") {
+                        MCPIntegration.copyCodexSnippet()
+                        mcpStatus = "Codex TOML snippet copied to clipboard."
+                    }
+
+                    Spacer()
+                }
+
+                if let status = mcpStatus {
+                    Text(status)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             Spacer()
         }
         .padding(20)
-        .frame(width: 440, height: 220)
+        .frame(width: 440, height: 380)
     }
 }
 
@@ -162,7 +220,7 @@ final class SettingsWindowController {
     func show() {
         if window == nil {
             let w = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 440, height: 220),
+                contentRect: NSRect(x: 0, y: 0, width: 440, height: 380),
                 styleMask: [.titled, .closable],
                 backing: .buffered, defer: false)
             w.title = "knote Settings"
