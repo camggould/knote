@@ -40,10 +40,12 @@ Encoder:
 
 ## Install
 
-Grab the latest `knote-<version>-macos-arm64.zip` from the
-[**Releases**](https://github.com/camggould/knote/releases) page, unzip, and
-drag `Knote.app` into `/Applications`. (Apple Silicon; ad-hoc signed — on first
-launch, right-click → **Open** to approve.) Then skip to step 3.
+Download the latest **`knote-<version>-macos-arm64.dmg`** from the
+[**Releases**](https://github.com/camggould/knote/releases) page, open it, and
+drag **Knote.app** onto the **Applications** folder shown in the window. (Apple
+Silicon; ad-hoc signed — on first launch, right-click the app → **Open** to
+approve.) Then skip to step 3. (A `.zip` is also attached — it's what the in-app
+updater uses.)
 
 To build it yourself instead (requires **Xcode 16+** on macOS 14+):
 
@@ -260,7 +262,10 @@ Icon/
   AppIcon.icns     Generated app icon (bundled by make_app.sh)
 scripts/
   make_app.sh      Assemble the .app bundle
+  make_dmg.sh      Build the drag-to-Applications .dmg
   make_icon.py     Regenerate AppIcon.icns from Icon/knote-source.png
+  snapshots.sh     Render UI states to PNGs (offscreen)
+  test-mcp.sh      Smoke-test the MCP helper
   convert_model.py BGE → Core ML conversion
 ```
 

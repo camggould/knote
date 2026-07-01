@@ -35,19 +35,25 @@ jobs:
           KNOTE_VERSION: ${{ steps.version.outputs.version }}
         run: ./scripts/make_app.sh
 
-      - name: Package (zip, preserving signature)
+      - name: Package (zip for the auto-updater, DMG for humans)
         env:
           VERSION: ${{ steps.version.outputs.version }}
+          KNOTE_VERSION: ${{ steps.version.outputs.version }}
         run: |
+          # Zip — consumed by the in-app updater; keep this name stable.
           ARTIFACT="knote-${VERSION}-macos-arm64.zip"
           ditto -c -k --keepParent build/Knote.app "$ARTIFACT"
           shasum -a 256 "$ARTIFACT" | tee "$ARTIFACT.sha256"
           echo "ARTIFACT=$ARTIFACT" >> "$GITHUB_ENV"
+          # DMG — the drag-to-Applications download.
+          ./scripts/make_dmg.sh
+          echo "DMG=build/knote-${VERSION}-macos-arm64.dmg" >> "$GITHUB_ENV"
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
+            ${{ env.DMG }}
             ${{ env.ARTIFACT }}
             ${{ env.ARTIFACT }}.sha256
           generate_release_notes: true
