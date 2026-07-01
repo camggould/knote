@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var hotkeys: HotkeyController?
     private var panelController: PanelController?
     private var settingsWindow: SettingsWindowController?
+    private let updater = Updater()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupMainMenu()
@@ -58,6 +59,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let settings = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
         settings.target = self
         menu.addItem(settings)
+
+        let checkUpdates = NSMenuItem(title: "Check for Updates…",
+                                      action: #selector(checkForUpdatesMenuAction),
+                                      keyEquivalent: "")
+        checkUpdates.target = self
+        menu.addItem(checkUpdates)
         menu.addItem(.separator())
 
         let login = NSMenuItem(title: "Launch at Login", action: #selector(toggleLoginItem), keyEquivalent: "")
@@ -81,6 +88,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func openPanel() { panelController?.show() }
 
     @objc private func openSettings() { settingsWindow?.show() }
+
+    @objc private func checkForUpdatesMenuAction() {
+        Task { @MainActor in await self.checkForUpdates() }
+    }
+
+    private func checkForUpdates() async {
+        do {
+            if let release = try await updater.checkForUpdate() {
+                let alert = NSAlert()
+                alert.messageText = "knote \(release.version) is available."
+                alert.informativeText = "Install now?"
+                alert.addButton(withTitle: "Install")
+                alert.addButton(withTitle: "Later")
+                guard alert.runModal() == .alertFirstButtonReturn else { return }
+                Task {
+                    do {
+                        try await self.updater.install(release)
+                    } catch {
+                        await MainActor.run {
+                            let errAlert = NSAlert()
+                            errAlert.messageText = "Update failed"
+                            errAlert.informativeText = error.localizedDescription
+                            errAlert.runModal()
+                        }
+                    }
+                }
+            } else {
+                let alert = NSAlert()
+                alert.messageText = "You're up to date."
+                alert.informativeText = "knote \(Updater.currentVersion()) is the latest version."
+                alert.runModal()
+            }
+        } catch {
+            let alert = NSAlert()
+            alert.messageText = "Could not check for updates"
+            alert.informativeText = error.localizedDescription
+            alert.runModal()
+        }
+    }
 
     /// A minimal main menu with a standard Edit menu. As a menu-bar accessory app
     /// we don't show a menu bar, but the Edit menu's key equivalents (⌘X/⌘C/⌘V/
