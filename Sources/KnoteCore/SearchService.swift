@@ -138,7 +138,7 @@ public final class SearchService: @unchecked Sendable {
     private func extractTagsFromQuery(_ query: String) -> (tags: [String], freeText: String) {
         var tags = Set<String>()
         var freeTextParts: [String] = []
-        let pattern = try! NSRegularExpression(pattern: "#([A-Za-z0-9_]+)", options: [])
+        let pattern = try! NSRegularExpression(pattern: Note.tagPattern, options: [])
         let range = NSRange(query.startIndex..<query.endIndex, in: query)
 
         var lastEnd = query.startIndex

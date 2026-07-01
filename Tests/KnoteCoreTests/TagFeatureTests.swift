@@ -5,9 +5,15 @@ final class TagFeatureTests: XCTestCase {
     // MARK: - Tag Extraction Tests
 
     func testExtractTagsBasic() throws {
-        let body = "Plan #Work and #work-ish #idea"
+        let body = "Plan #Work and #idea"
         let tags = Note.extractTags(from: body)
         XCTAssertEqual(Set(tags), ["work", "idea"])
+    }
+
+    func testExtractTagsSupportsHyphens() throws {
+        // Internal hyphens are kept; a trailing hyphen is not part of the tag.
+        XCTAssertEqual(Note.extractTags(from: "#multi-word-tag ok"), ["multi-word-tag"])
+        XCTAssertEqual(Note.extractTags(from: "#work-ish and #plan-"), ["plan", "work-ish"])
     }
 
     func testExtractTagsIgnoresHashWithoutWord() throws {

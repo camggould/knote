@@ -34,12 +34,15 @@ public struct Note: Identifiable, Equatable, Codable, Sendable,
         return "Untitled"
     }
 
-    /// Extract tags from body text. Matches `#` followed by one or more
-    /// [A-Za-z0-9_], case-insensitive. Returns lowercased, de-duplicated names (no `#`).
-    /// Ignores a lone `#`.
+    /// The tag pattern: `#` then a word of [A-Za-z0-9_] with optional internal
+    /// hyphens (e.g. `#multi-word-tag`), but no leading/trailing hyphen.
+    public static let tagPattern = "#([A-Za-z0-9_]+(?:-[A-Za-z0-9_]+)*)"
+
+    /// Extract tags from body text. Returns lowercased, de-duplicated names (no
+    /// `#`). Ignores a lone `#`.
     public static func extractTags(from body: String) -> [String] {
         var tags = Set<String>()
-        let pattern = try! NSRegularExpression(pattern: "#([A-Za-z0-9_]+)", options: [])
+        let pattern = try! NSRegularExpression(pattern: tagPattern, options: [])
         let range = NSRange(body.startIndex..<body.endIndex, in: body)
         let matches = pattern.matches(in: body, options: [], range: range)
         for match in matches {
