@@ -8,6 +8,9 @@ cd "$(dirname "$0")/.."
 CONFIG="release"
 [[ "${1:-}" == "--debug" ]] && CONFIG="debug"
 
+# Version stamped into the bundle (CI passes the git tag, e.g. "0.1.0").
+VERSION="${KNOTE_VERSION:-0.1.0}"
+
 echo "› swift build -c $CONFIG"
 swift build -c "$CONFIG"
 
@@ -37,8 +40,8 @@ cat > "$CONTENTS/Info.plist" <<'PLIST'
     <key>CFBundleExecutable</key>      <string>knote</string>
     <key>CFBundleIconFile</key>        <string>AppIcon</string>
     <key>CFBundlePackageType</key>     <string>APPL</string>
-    <key>CFBundleShortVersionString</key> <string>0.1.0</string>
-    <key>CFBundleVersion</key>         <string>1</string>
+    <key>CFBundleShortVersionString</key> <string>__VERSION__</string>
+    <key>CFBundleVersion</key>         <string>__VERSION__</string>
     <key>LSMinimumSystemVersion</key>  <string>14.0</string>
     <!-- Accessory app: no Dock icon, runs in the background. -->
     <key>LSUIElement</key>             <true/>
@@ -47,7 +50,10 @@ cat > "$CONTENTS/Info.plist" <<'PLIST'
 </plist>
 PLIST
 
+# Stamp the version into the plist.
+sed -i '' "s/__VERSION__/$VERSION/g" "$CONTENTS/Info.plist"
+
 # Ad-hoc sign so the login-item API and hardened launch behave locally.
 codesign --force --deep --sign - "$APP" >/dev/null 2>&1 || true
 
-echo "✓ Built $APP"
+echo "✓ Built $APP (v$VERSION)"

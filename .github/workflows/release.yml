@@ -1,0 +1,54 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write  # create the GitHub Release
+
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Resolve version from tag
+        id: version
+        env:
+          TAG: ${{ github.ref_name }}   # e.g. v0.1.0 — via env, not inlined
+        run: |
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-].+)?$ ]]; then
+            echo "::error::Tag '$TAG' is not a vMAJOR.MINOR.PATCH version"; exit 1
+          fi
+          VERSION="${TAG#v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Building version $VERSION"
+
+      - name: Build app bundle
+        env:
+          KNOTE_VERSION: ${{ steps.version.outputs.version }}
+        run: ./scripts/make_app.sh
+
+      - name: Package (zip, preserving signature)
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          ARTIFACT="knote-${VERSION}-macos-arm64.zip"
+          ditto -c -k --keepParent build/Knote.app "$ARTIFACT"
+          shasum -a 256 "$ARTIFACT" | tee "$ARTIFACT.sha256"
+          echo "ARTIFACT=$ARTIFACT" >> "$GITHUB_ENV"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ env.ARTIFACT }}
+            ${{ env.ARTIFACT }}.sha256
+          generate_release_notes: true
+          fail_on_unmatched_files: true

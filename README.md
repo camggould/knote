@@ -1,5 +1,7 @@
 # knote
 
+[![CI](https://github.com/camggould/knote/actions/workflows/ci.yml/badge.svg)](https://github.com/camggould/knote/actions/workflows/ci.yml)
+
 A native macOS quick-notes launcher. Hit a global hotkey, and a Spotlight-style
 panel appears anywhere. Type `/n …` to capture a note, or type a natural-language
 query to find past ones — results are ranked by meaning, keyboard-navigable, and
@@ -29,13 +31,17 @@ Working v1 skeleton, end-to-end:
 
 ## Install
 
-knote has no prebuilt release yet, so you build the `.app` once and copy it into
-`/Applications`. Requires **Xcode 16+** (or the Swift 6 toolchain) on macOS 14+.
+Grab the latest `knote-<version>-macos-arm64.zip` from the
+[**Releases**](https://github.com/camggould/knote/releases) page, unzip, and
+drag `Knote.app` into `/Applications`. (Apple Silicon; ad-hoc signed — on first
+launch, right-click → **Open** to approve.) Then skip to step 3.
+
+To build it yourself instead (requires **Xcode 16+** on macOS 14+):
 
 **1. Build the app bundle**
 
 ```bash
-git clone <this-repo> && cd knote
+git clone https://github.com/camggould/knote && cd knote
 ./scripts/make_app.sh            # → build/Knote.app
 ```
 
@@ -87,6 +93,21 @@ open /Applications/Knote.app
 swift run knote                  # run from the terminal (no bundle)
 swift test                       # KnoteCore unit tests
 ```
+
+CI (`.github/workflows/ci.yml`) builds and tests every push to `main` and every
+PR on a macOS runner.
+
+## Releasing
+
+Push a `vMAJOR.MINOR.PATCH` tag and CI builds the app, zips it, and publishes a
+GitHub Release with the artifact + SHA-256 (`.github/workflows/release.yml`):
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The tag version is stamped into the app bundle (`CFBundleShortVersionString`).
 
 ## Keyboard
 
