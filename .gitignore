@@ -8,6 +8,9 @@ build/
 # Local tooling
 .claude/
 
+# Rendered UI snapshots (generate with scripts/snapshots.sh)
+snapshots/
+
 # Python (model conversion)
 .venv/
 __pycache__/

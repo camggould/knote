@@ -189,4 +189,9 @@ final class AppState: ObservableObject {
     func returnToEditing() {
         if phase != .editing { phase = .editing; selection = nil }
     }
+
+    // MARK: - Snapshot support (used by SnapshotRenderer for offscreen rendering)
+
+    func recentsForSnapshot() -> [SearchResult] { search.recents() }
+    func searchForSnapshot(_ query: String) -> [SearchResult] { search.search(query) }
 }
