@@ -59,10 +59,34 @@ public struct SemVer: Comparable, Equatable {
         }
     }
 
+    /// True if this version carries a prerelease identifier (e.g. `-beta`).
+    public var isPrerelease: Bool { prerelease != nil }
+
     /// Returns true iff both strings parse as valid SemVer versions and
     /// `candidate` is strictly newer than `current`.
     public static func isNewer(_ candidate: String, than current: String) -> Bool {
         guard let c = SemVer(candidate), let cur = SemVer(current) else { return false }
         return c > cur
+    }
+
+    /// From `versions`, pick the highest one that is strictly newer than
+    /// `current`. When `allowPrerelease` is false, prerelease versions are
+    /// excluded. Unparseable strings are ignored. Returns the original string
+    /// of the winner, or nil if none qualify.
+    public static func pickNewest(from versions: [String],
+                                  allowPrerelease: Bool,
+                                  newerThan current: String) -> String? {
+        let candidates = versions.compactMap { raw -> (raw: String, ver: SemVer)? in
+            guard let ver = SemVer(raw) else { return nil }
+            if !allowPrerelease && ver.isPrerelease { return nil }
+            return (raw, ver)
+        }
+        let eligible: [(raw: String, ver: SemVer)]
+        if let cur = SemVer(current) {
+            eligible = candidates.filter { $0.ver > cur }
+        } else {
+            eligible = candidates  // unparseable current → any candidate is "newer"
+        }
+        return eligible.max { $0.ver < $1.ver }?.raw
     }
 }

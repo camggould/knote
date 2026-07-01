@@ -7,6 +7,7 @@ import KnoteCore
 
 struct ReleaseInfo {
     let version: String
+    let isPrerelease: Bool
     let zipURL: URL
     let sha256URL: URL?
     let htmlURL: URL
@@ -45,11 +46,15 @@ enum UpdaterError: Error, LocalizedError {
 private struct GitHubRelease: Decodable {
     let tagName: String
     let htmlUrl: String
+    let draft: Bool
+    let prerelease: Bool
     let assets: [GitHubAsset]
 
     enum CodingKeys: String, CodingKey {
         case tagName = "tag_name"
         case htmlUrl = "html_url"
+        case draft
+        case prerelease
         case assets
     }
 }
@@ -67,48 +72,57 @@ private struct GitHubAsset: Decodable {
 // MARK: - Updater
 
 final class Updater {
-    private let apiURL = URL(string: "https://api.github.com/repos/camggould/knote/releases/latest")!
+    // The full releases list — NOT /releases/latest, which excludes pre-releases
+    // (so a beta build would never see newer betas; see issue with v0.2.x).
+    private let apiURL = URL(string: "https://api.github.com/repos/camggould/knote/releases?per_page=30")!
 
     /// The running app's version string from its Info.plist.
     static func currentVersion() -> String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
     }
 
-    /// Fetches the latest GitHub release. Returns nil if no arm64 zip asset is present.
-    func fetchLatestRelease() async throws -> ReleaseInfo? {
+    /// Fetches all published releases that ship a macOS arm64 zip asset.
+    func fetchReleases() async throws -> [ReleaseInfo] {
         var request = URLRequest(url: apiURL, timeoutInterval: 15)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         request.setValue("knote", forHTTPHeaderField: "User-Agent")
 
         let (data, response) = try await URLSession.shared.data(for: request)
-
         if let http = response as? HTTPURLResponse, http.statusCode != 200 {
             throw UpdaterError.badServerResponse(http.statusCode)
         }
 
-        let release = try JSONDecoder().decode(GitHubRelease.self, from: data)
-
-        // Locate the arm64 zip asset and optional sha256 file.
-        var zipURL: URL?
-        var sha256URL: URL?
-        for asset in release.assets {
-            if asset.name.range(of: #"knote-.*-macos-arm64\.zip$"#, options: .regularExpression) != nil {
-                zipURL = URL(string: asset.browserDownloadUrl)
-            } else if asset.name.hasSuffix(".sha256") {
-                sha256URL = URL(string: asset.browserDownloadUrl)
+        let releases = try JSONDecoder().decode([GitHubRelease].self, from: data)
+        return releases.compactMap { release -> ReleaseInfo? in
+            guard !release.draft else { return nil }
+            var zipURL: URL?
+            var sha256URL: URL?
+            for asset in release.assets {
+                if asset.name.range(of: #"knote-.*-macos-arm64\.zip$"#, options: .regularExpression) != nil {
+                    zipURL = URL(string: asset.browserDownloadUrl)
+                } else if asset.name.hasSuffix(".sha256") {
+                    sha256URL = URL(string: asset.browserDownloadUrl)
+                }
             }
+            guard let zip = zipURL else { return nil }
+            return ReleaseInfo(version: release.tagName,
+                               isPrerelease: release.prerelease,
+                               zipURL: zip,
+                               sha256URL: sha256URL,
+                               htmlURL: URL(string: release.htmlUrl) ?? apiURL)
         }
-
-        guard let zip = zipURL else { return nil }
-
-        let htmlURL = URL(string: release.htmlUrl) ?? apiURL
-        return ReleaseInfo(version: release.tagName, zipURL: zip, sha256URL: sha256URL, htmlURL: htmlURL)
     }
 
-    /// Returns the latest release only if it is strictly newer than the running version.
+    /// Returns the newest release strictly newer than the running version, or nil.
+    /// While knote is pre-1.0 beta software, pre-releases are always considered
+    /// (revisit with a "stable channel" preference once there's a stable line).
     func checkForUpdate() async throws -> ReleaseInfo? {
-        guard let release = try await fetchLatestRelease() else { return nil }
-        return SemVer.isNewer(release.version, than: Updater.currentVersion()) ? release : nil
+        let releases = try await fetchReleases()
+        let current = Updater.currentVersion()
+        guard let winner = SemVer.pickNewest(from: releases.map(\.version),
+                                             allowPrerelease: true,
+                                             newerThan: current) else { return nil }
+        return releases.first { $0.version == winner }
     }
 
     /// Downloads, verifies, and installs the given release, then relaunches.

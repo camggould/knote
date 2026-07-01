@@ -76,4 +76,35 @@ final class SemVerTests: XCTestCase {
     func testIsNewerFalseWhenOlder() {
         XCTAssertFalse(SemVer.isNewer("1.0.0", than: "1.0.1"))
     }
+
+    // MARK: - pickNewest (the update-selection logic)
+
+    func testPickNewestFindsBetaWhenAllowed() {
+        // The real bug: a beta build must see a newer beta.
+        let versions = ["v0.1.0", "v0.2.0-beta", "v0.2.1-beta"]
+        XCTAssertEqual(
+            SemVer.pickNewest(from: versions, allowPrerelease: true, newerThan: "0.2.0-beta"),
+            "v0.2.1-beta")
+    }
+
+    func testPickNewestExcludesPrereleasesWhenNotAllowed() {
+        let versions = ["v0.1.0", "v0.2.0-beta", "v0.2.1-beta"]
+        XCTAssertNil(
+            SemVer.pickNewest(from: versions, allowPrerelease: false, newerThan: "0.2.0-beta"))
+        XCTAssertEqual(
+            SemVer.pickNewest(from: ["v0.1.0", "v0.3.0"], allowPrerelease: false, newerThan: "0.1.0"),
+            "v0.3.0")
+    }
+
+    func testPickNewestNilWhenNothingNewer() {
+        XCTAssertNil(
+            SemVer.pickNewest(from: ["v0.1.0", "v0.2.1-beta"], allowPrerelease: true, newerThan: "0.2.1-beta"))
+    }
+
+    func testPickNewestPicksHighestNotFirst() {
+        let versions = ["v0.2.1-beta", "v0.2.10-beta", "v0.2.2-beta"]
+        XCTAssertEqual(
+            SemVer.pickNewest(from: versions, allowPrerelease: true, newerThan: "0.2.0"),
+            "v0.2.10-beta")
+    }
 }
