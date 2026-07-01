@@ -96,6 +96,90 @@ cp -R build/Knote.app /Applications/
 open /Applications/Knote.app
 ```
 
+## Using knote
+
+Press **⌥Space** anywhere to summon the panel. Start typing. Click away or press
+**Esc** to dismiss it. Everything below is keyboard-driven.
+
+### Capture a note
+
+Type `/n` then your note, and press **↩** to save:
+
+```
+/n call the dentist tomorrow #health
+```
+
+Any `#hashtags` in the body become **tags** automatically (see below).
+
+### Find notes
+
+Just type — no prefix. knote ranks by **meaning + keywords** (semantic + BM25),
+so a query like `teeth appointment` surfaces that dentist note even without exact
+word matches. Recent notes break ties.
+
+- **↓ / ↑** move the selection through the results.
+- **↩** opens the selected note — which **copies its text to the clipboard** (handy
+  for pasting a snippet elsewhere) and closes the panel.
+- Empty query shows your most recent notes.
+
+### Tags — `#tag`
+
+Tags come from `#hashtags` in a note's body and show as chips on each result.
+Search by tag by typing it:
+
+- `#work` — only notes tagged `work`.
+- `#work budget` — tagged `work` **and** matching “budget”.
+
+### Spaces — organize & scope
+
+Spaces are optional buckets for notes.
+
+| Type | Does |
+|------|------|
+| `/s Reading` | Create a space called **Reading** |
+| `/ns Reading <note>` | Capture a note **into** Reading |
+| `/ss Reading <query>` | Search **only within** Reading |
+
+While typing a space name after `/ns ` or `/ss `, press **⇥ Tab** to autocomplete
+it from your existing spaces.
+
+### Link notes — question ↔ answer
+
+Select a result (**↓**), then press **⌘L** to link it to another note. Type to
+find the target, press **↩**, and it's linked as the **answer** to the note you
+started from. Notes with links show a 🔗 indicator. (Great for pairing a question
+note with the note that resolves it.)
+
+### Delete a note
+
+Arrow (**↓**) into the results to select a note, then press **⌫** — knote asks to
+confirm (**↩** to delete, **Esc** to cancel). While you're still typing a query,
+**⌫** just edits your text; it only deletes once a note is selected. **⌘⌫** deletes
+the selected note from anywhere.
+
+### Keyboard reference
+
+| Key | Action |
+|-----|--------|
+| `⌥Space` | Show / hide the panel (from anywhere; rebindable in Settings) |
+| type | Search by meaning + keywords |
+| `/n <text>` | Compose a note (`↩` saves) |
+| `/s <name>` | Create a space |
+| `/ns <space> <text>` | Capture into a space |
+| `/ss <space> <query>` | Search within a space |
+| `#tag` | Filter to a tag |
+| `⇥` | Autocomplete a space name |
+| `↓` / `↑` | Move selection through results |
+| `↩` | Open selected result (copies to clipboard) |
+| `⌘L` | Link the selected note to another (as its answer) |
+| `⌫` | With a result selected: delete (asks to confirm) |
+| `⌘⌫` | Delete selected result from anywhere |
+| `⌘C` / `⌘V` / `⌘X` / `⌘A` | Standard editing in the field |
+| `Esc` | Cancel confirm → exit selection → clear → hide |
+
+Menu-bar icon → **Settings…** (⌘,) to rebind the shortcut, **Launch at Login**,
+and **Check for Updates…**.
+
 ## Give an LLM access to your notes (MCP)
 
 `knote-mcp` is a local [MCP](https://modelcontextprotocol.io) stdio server that
@@ -139,19 +223,6 @@ git push origin v0.1.0
 ```
 
 The tag version is stamped into the app bundle (`CFBundleShortVersionString`).
-
-## Keyboard
-
-| Key            | Action                                                        |
-|----------------|---------------------------------------------------------------|
-| `⌥Space`       | Show / hide the panel (from anywhere)                         |
-| type           | Search notes by meaning + keywords                            |
-| `/n <text>`    | Compose a note; `↩` saves                                     |
-| `↓` / `↑`      | Move selection into / through results                        |
-| `↩`            | Open selected result (copies to clipboard)                   |
-| `⌫`            | With a result selected: delete (asks to confirm)             |
-| `⌘⌫`           | Delete selected result from anywhere                         |
-| `Esc`          | Cancel confirm → exit selection → clear → hide               |
 
 ## Upgrade to Core ML BGE embeddings (optional, better search)
 
